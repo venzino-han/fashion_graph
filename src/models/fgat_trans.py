@@ -3,7 +3,7 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 from dgl.nn.pytorch.conv import EGATConv
-from edge_drop import edge_drop
+from models.target_pooling import TragetAttentionPooling
 
 
 class FGAT(nn.Module):
@@ -12,7 +12,7 @@ class FGAT(nn.Module):
         in_nfeats,
         in_efeats,
         latent_dim,
-        num_heads=4,
+        num_heads=2,
         edge_dropout=0.2,
     ):
         super(FGAT, self).__init__()
@@ -44,11 +44,12 @@ class FGAT(nn.Module):
                 )
             )
 
-        self.lin1 = nn.Linear(2 * sum(latent_dim), 128)  # concat user, item vector
-        self.dropout1 = nn.Dropout(0.5)
-        self.lin2 = nn.Linear(128, 1)
+        self.pooling_u = TragetAttentionPooling(infeat=64, hidden_dim=64)  # create a Global Attention Pooling layer
+        self.pooling_i = TragetAttentionPooling(infeat=64, hidden_dim=64)  # create a Global Attention Pooling layer
 
-        self.cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        self.lin1 = nn.Linear(128, 64)
+        self.dropout1 = nn.Dropout(0.5)
+        self.lin2 = nn.Linear(64, 1)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -65,31 +66,26 @@ class FGAT(nn.Module):
 
     def forward(self, graph):
         """graph : subgraph"""
-        graph = edge_drop(graph, self.edge_dropout,)
+        # graph = edge_drop(graph, self.edge_dropout,)
 
-        graph.edata["norm"] = graph.edata["edge_mask"]
-        node_x = graph.ndata["x"].float()
-
-        states = []
-
-        # get user, item idx --> vector
-        users = graph.ndata["nlabel"][:, 1] == 1
-        items = graph.ndata["nlabel"][:, 0] == 1
-
-        x = node_x  # original
+        # graph.edata["norm"] = graph.edata["edge_mask"]
+        x = graph.ndata["x"].float()
         e = graph.edata["efeat"]
 
+        states = []
         for conv in self.convs:
             x, _ = conv(graph=graph, nfeats=x, efeats=e)
             x = th.sum(x, dim=1)
             x = self.elu(x)
             states.append(x)
 
-        states = th.cat(states, 1)
-        x = th.cat([states[users], states[items]], 1)
+        x = th.cat(states, 1)
+        x_u = self.pooling_u(graph, x, target_node_type=0)
+        x_i = self.pooling_i(graph, x, target_node_type=1)
+        x = th.cat([x_u, x_i], 1)
         x = th.relu(self.lin1(x))
         x = self.dropout1(x)
         x = self.lin2(x)
         x = th.sigmoid(x)
-
-        return x[:, 0]
+        x = x[:, 0].squeeze()
+        return x

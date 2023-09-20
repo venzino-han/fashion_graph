@@ -15,6 +15,7 @@ from scipy.sparse import coo_matrix
 
 import config
 from data_generator_utils import dedup_edges, collate_data, one_hot, get_subgraph_label
+from edge_drop import edge_drop
 
 
 class UserOutfitSubgraph(Dataset):
@@ -32,7 +33,9 @@ class UserOutfitSubgraph(Dataset):
                  user_itemset_df,
                  itemset_item_df,
                  
-                 user_itemset_query_df,):
+                 user_itemset_query_df,
+                 edge_dropout=0.0,
+                 ):
         
         ''' 
         prepare for subgraph extraction
@@ -49,6 +52,7 @@ class UserOutfitSubgraph(Dataset):
         self.item_itemset_dict = item_itemset_dict 
         self.user_itemset_dict = user_itemset_dict 
         self.itemset_user_dict = itemset_user_dict 
+        self.edge_dropout = edge_dropout
 
         self.graph = self._build_graph(user_item_df, user_itemset_df, itemset_item_df)
         # print(self.graph)
@@ -82,7 +86,7 @@ class UserOutfitSubgraph(Dataset):
                                             i_neighbors=th.tensor(i_neighbors),
                                             s_neighbors=th.tensor(s_neighbors)
                                             )
-                
+        subgraph = edge_drop(subgraph, self.edge_dropout,)
         return subgraph, th.tensor(label, dtype=th.float32)
     
     def _build_graph(self, user_item_df, user_itemset_df, itemset_item_df):
@@ -128,7 +132,7 @@ class UserOutfitSubgraph(Dataset):
         return graph
 
 
-def get_task1_dataloader(data_path, batch_size, num_workers):
+def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
     with open('./processed_data/user_item_dict.pkl', 'rb') as f:
         user_item_dict = pickle.load(f)
     with open('./processed_data/item_user_dict.pkl', 'rb') as f:
@@ -158,7 +162,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers):
                                             user_item_df,
                                             user_itemset_df,
                                             itemset_item_df,                 
-                                            user_itemset_query_df,)
+                                            user_itemset_query_df,
+                                            edge_dropout,
+                                            )
 
     train_dataloader = DataLoader(user_outfit_subgraph_dataset, 
                                   batch_size=batch_size, 
@@ -180,7 +186,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers):
                                             user_item_df,
                                             user_itemset_df,
                                             itemset_item_df,                 
-                                            user_itemset_query_df,)
+                                            user_itemset_query_df,
+                                            edge_dropout,
+                                            )
 
     valid_dataloader = DataLoader(user_outfit_subgraph_dataset, 
                                   batch_size=batch_size, 
@@ -202,7 +210,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers):
                                             user_item_df,
                                             user_itemset_df,
                                             itemset_item_df,                 
-                                            user_itemset_query_df,)
+                                            user_itemset_query_df,
+                                            edge_dropout,
+                                            )
 
     test_dataloader = DataLoader(user_outfit_subgraph_dataset, 
                                   batch_size=batch_size, 

@@ -13,9 +13,12 @@ import torch as th
 import torch.nn as nn
 
 from easydict import EasyDict
-from models.frgcn import FRGCN
-from models.fgat import FGAT
-from models.flgcn import FLGCN
+# from models.frgcn import FRGCN
+from models.frgcn_trans import FRGCN
+# from models.fgat import FGAT
+from models.fgat_trans import FGAT
+# from models.flgcn import FLGCN
+from models.flgcn_trans import FLGCN
 
 from prettytable import PrettyTable
 
@@ -57,33 +60,35 @@ def evaluate_task2(model, loader, device):
     val_preds = []
     for batch in loader:
         with th.no_grad():
-            preds = model(batch[0].to(device))
+            preds, _ = model(batch[0].to(device))
         # labels = batch[1].to(device)
         # val_labels.extend(labels.cpu().tolist())
         val_preds.extend(preds.cpu().tolist())
 
-    itemset_item_answer_dict={k:v for k,v in zip(task2_valid_answer_df.itemset_id,task2_valid_answer_df.item_id)}
+    itemset_item_answer_dict={k:v for k,v in zip(task2_valid_answer_df.itemset_id, task2_valid_answer_df.item_id)}
 
     preds_df = pd.DataFrame({
         'itemset_id': task2_valid_query_df.itemset_id,
         'item_id': task2_valid_query_df.item_id,
         'score': val_preds,
     })
+
     accs = []
-    ranks = []
+    hit = []
     for itemset_id, sub_df in preds_df.groupby('itemset_id'):
         sub_df = sub_df.sort_values('score', ascending=False)
-        result = sub_df.item_id[:100]
+        pred_iid = list(sub_df.item_id)[0]
         answer_iid = itemset_item_answer_dict[itemset_id]
-        rank = get_rank(list(result), answer_iid)
-        ranks.append(rank)
-        if rank == 101:
+        if pred_iid != answer_iid:
             accs.append(0)
+            hit.append(0)
         else:
             accs.append(1)
-    val_rank = np.mean(ranks)
+            hit.append(1)
+    val_result = np.mean(hit)
     val_acc = np.mean(accs)
-    return None, val_rank, val_acc
+    print('val hit@3: ', val_result)
+    return None, val_result, val_acc
 
 def evaluate(model, loader, device):
     # Evaluate AUC, ACC
@@ -92,7 +97,7 @@ def evaluate(model, loader, device):
     val_preds = []
     for batch in loader:
         with th.no_grad():
-            preds = model(batch[0].to(device))
+            preds, _ = model(batch[0].to(device))
         labels = batch[1].to(device)
         val_labels.extend(labels.cpu().tolist())
         val_preds.extend(preds.cpu().tolist())
@@ -119,11 +124,10 @@ def train_epoch(model, optimizer, loader, device, logger, log_interval):
 
         inputs = batch[0].to(device)
         labels = batch[1].to(device)
-        preds = model(inputs)
-        # print(preds[:8], labels[:8])
+        preds, triplet_loss = model(inputs)
         
         optimizer.zero_grad()
-        loss = mse_loss_fn(preds, labels)
+        loss = mse_loss_fn(preds, labels) #+ 0.05*triplet_loss
         loss.backward()
         optimizer.step()
 
@@ -287,6 +291,7 @@ def main():
             data_path=sub_args.dataset,
             batch_size=sub_args.batch_size,
             num_workers=config.NUM_WORKER,
+            edge_dropout=sub_args.edge_dropout,
         )
 
         for lr in args.train_lrs:

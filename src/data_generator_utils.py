@@ -56,9 +56,8 @@ def get_subgraph_label(
     )
 
     subgraph.ndata["ntype"] = th.tensor(node_labels, dtype=th.int8)
-    subgraph.ndata["nlabel"] = one_hot(node_labels, 5)
-    subgraph.ndata["x"] = subgraph.ndata["nlabel"]
-
+    subgraph.ndata["x"] = one_hot(node_labels, 5)
+    
     # set edge mask to zero as to remove links between target nodes in training process
     subgraph.edata["edge_mask"] = th.ones(subgraph.number_of_edges(), dtype=th.float32)
 
