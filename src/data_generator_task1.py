@@ -35,6 +35,10 @@ class UserOutfitSubgraph(Dataset):
                  
                  user_itemset_query_df,
                  edge_dropout=0.0,
+
+                 use_ui=True,
+                 use_us=True,
+                 use_si=True,
                  ):
         
         ''' 
@@ -42,10 +46,6 @@ class UserOutfitSubgraph(Dataset):
         user_itemset_query_df : main iteration pairs
         '''
         self.user_itemset_query_df = user_itemset_query_df
-        # self.user_item_df = user_item_df
-        # self.user_itemset_df = user_itemset_df
-        # self.itemset_item_df = itemset_item_df
-
         self.user_item_dict = user_item_dict
         self.item_user_dict = item_user_dict
         self.itemset_item_dict = itemset_item_dict 
@@ -53,12 +53,10 @@ class UserOutfitSubgraph(Dataset):
         self.user_itemset_dict = user_itemset_dict 
         self.itemset_user_dict = itemset_user_dict 
         self.edge_dropout = edge_dropout
-
+        self.use_ui = use_ui
+        self.use_us = use_us
+        self.use_si = use_si
         self.graph = self._build_graph(user_item_df, user_itemset_df, itemset_item_df)
-        # print(self.graph)
-        # print(self.graph.ndata['ntype'])
-        # print(self.graph.edata['etype'])
-
 
     def __len__(self):
         return len(self.user_itemset_query_df)
@@ -102,16 +100,38 @@ class UserOutfitSubgraph(Dataset):
 
         num_ui, num_us, num_si = len(user_item_df), len(user_itemset_df), len(itemset_item_df)
 
-        src_nodes = np.concatenate((user_ids_item, item_ids_user, 
-                                    user_ids_itemset, itemset_ids_user, 
-                                    itemset_ids_item, item_ids_itemset,
-                                    ))
-        dst_nodes = np.concatenate((item_ids_user, user_ids_item, 
-                                    itemset_ids_user, user_ids_itemset, 
-                                    item_ids_itemset, itemset_ids_item,
-                                    ))
+        src_nodes = []
+        dst_nodes = []
+        
+        if self.use_ui:
+            src_nodes.append(user_ids_item)
+            dst_nodes.append(item_ids_user)
+            src_nodes.append(item_ids_user)
+            dst_nodes.append(user_ids_item)
+        
+        if self.use_us:
+            src_nodes.append(user_ids_itemset)
+            dst_nodes.append(itemset_ids_user)
+            src_nodes.append(itemset_ids_user)
+            dst_nodes.append(user_ids_itemset)
+        
+        if self.use_si:
+            src_nodes.append(itemset_ids_item)
+            dst_nodes.append(item_ids_itemset)
+            src_nodes.append(item_ids_itemset)
+            dst_nodes.append(itemset_ids_item)
 
-        etypes = np.array([0]*num_ui*2 + [1]*num_us*2 + [2]*num_si*2)
+        src_nodes = np.concatenate(src_nodes)
+        dst_nodes = np.concatenate(dst_nodes)
+
+        etypes = []
+        if self.use_ui:
+            etypes += [0]*num_ui*2
+        if self.use_us:
+            etypes += [1]*num_us*2
+        if self.use_si:
+            etypes += [2]*num_si*2
+        etypes = np.array(etypes)
 
         self.num_nodes = max(src_nodes)+1
 
@@ -132,7 +152,7 @@ class UserOutfitSubgraph(Dataset):
         return graph
 
 
-def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
+def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0, ui=True, si=True, us=True):
     with open('./processed_data/user_item_dict.pkl', 'rb') as f:
         user_item_dict = pickle.load(f)
     with open('./processed_data/item_user_dict.pkl', 'rb') as f:
@@ -164,6 +184,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
                                             itemset_item_df,                 
                                             user_itemset_query_df,
                                             edge_dropout,
+                                            use_ui=ui,
+                                            use_us=us,
+                                            use_si=si,
                                             )
 
     train_dataloader = DataLoader(user_outfit_subgraph_dataset, 
@@ -188,6 +211,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
                                             itemset_item_df,                 
                                             user_itemset_query_df,
                                             edge_dropout,
+                                            use_ui=ui,
+                                            use_us=us,
+                                            use_si=si,
                                             )
 
     valid_dataloader = DataLoader(user_outfit_subgraph_dataset, 
@@ -212,6 +238,9 @@ def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
                                             itemset_item_df,                 
                                             user_itemset_query_df,
                                             edge_dropout,
+                                            use_ui=ui,
+                                            use_us=us,
+                                            use_si=si,
                                             )
 
     test_dataloader = DataLoader(user_outfit_subgraph_dataset, 

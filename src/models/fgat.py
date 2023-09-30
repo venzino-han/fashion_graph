@@ -1,54 +1,48 @@
-"""IGMC modules"""
+"""FGAT modules"""
 import numpy as np
 import torch as th
 import torch.nn as nn
-from dgl.nn.pytorch.conv import EGATConv
-from edge_drop import edge_drop
-
+from dgl.nn.pytorch.conv import GATConv
+from models.target_pooling import TragetAttentionPooling
+from models.diff_pooling import diff_pooling
 
 class FGAT(nn.Module):
     def __init__(
         self,
-        in_nfeats,
-        in_efeats,
-        latent_dim,
-        num_heads=4,
-        edge_dropout=0.2,
+        input_dims,
+        hidden_dims=32,
+        num_layers=4,
+        num_heads=2,
+        trans_pooling=True
     ):
         super(FGAT, self).__init__()
-        self.edge_dropout = edge_dropout
-        self.in_nfeats = in_nfeats
         self.elu = nn.ELU()
         self.leakyrelu = th.nn.LeakyReLU()
         self.convs = th.nn.ModuleList()
-
-
         self.convs.append(
-            EGATConv(
-                in_node_feats=in_nfeats,
-                out_node_feats=latent_dim[0],
-                in_edge_feats=in_efeats,
-                out_edge_feats=in_efeats,
+            GATConv(
+                in_feats=input_dims,
+                out_feats=hidden_dims,
                 num_heads=num_heads,
             )
         )
-
-        for i in range(0, len(latent_dim) - 1):
+        for i in range(num_layers-1):
             self.convs.append(
-                EGATConv(
-                    in_node_feats=latent_dim[i],
-                    out_node_feats=latent_dim[i+1],
-                    in_edge_feats=in_efeats,
-                    out_edge_feats=in_efeats,
+                GATConv(
+                    in_feats=hidden_dims,
+                    out_feats=hidden_dims,
                     num_heads=num_heads,
                 )
             )
-
-        self.lin1 = nn.Linear(2 * sum(latent_dim), 128)  # concat user, item vector
+        if trans_pooling:
+            self.pooling = TragetAttentionPooling(infeat=128, hidden_dim=64)  # create a Global Attention Pooling layer
+            self.lin1 = nn.Linear(128, 64)
+        else:
+            self.pooling = diff_pooling
+            # self.lin1 = nn.Linear(256, 64)
+            self.lin1 = nn.Linear(128, 64)
         self.dropout1 = nn.Dropout(0.5)
-        self.lin2 = nn.Linear(128, 1)
-
-        self.cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        self.lin2 = nn.Linear(64, 1)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -64,32 +58,18 @@ class FGAT(nn.Module):
         return parameters_dict
 
     def forward(self, graph):
-        """graph : subgraph"""
-        graph = edge_drop(graph, self.edge_dropout,)
-
-        graph.edata["norm"] = graph.edata["edge_mask"]
-        node_x = graph.ndata["x"].float()
-
+        x = graph.ndata["x"]
         states = []
-
-        # get user, item idx --> vector
-        users = graph.ndata["nlabel"][:, 1] == 1
-        items = graph.ndata["nlabel"][:, 0] == 1
-
-        x = node_x  # original
-        e = graph.edata["efeat"]
-
         for conv in self.convs:
-            x, _ = conv(graph=graph, nfeats=x, efeats=e)
+            x = conv(graph=graph, feat=x)
             x = th.sum(x, dim=1)
             x = self.elu(x)
             states.append(x)
-
-        states = th.cat(states, 1)
-        x = th.cat([states[users], states[items]], 1)
+        x = th.cat(states, 1)
+        x = self.pooling(graph, x)
         x = th.relu(self.lin1(x))
         x = self.dropout1(x)
         x = self.lin2(x)
         x = th.sigmoid(x)
-
-        return x[:, 0]
+        x = x[:, 0].squeeze()
+        return x

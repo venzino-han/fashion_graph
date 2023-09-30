@@ -7,14 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from dgl.nn.pytorch import RelGraphConv
-from edge_drop import edge_drop
-
-
-def uniform(size, tensor):
-    bound = 1.0 / math.sqrt(size)
-    if tensor is not None:
-        tensor.data.uniform_(-bound, bound)
-
+from models.target_pooling import TragetAttentionPooling
+from models.diff_pooling import diff_pooling
 
 class FRGCN(nn.Module):
     # The GNN model of Inductive Graph-based Matrix Completion.
@@ -22,56 +16,40 @@ class FRGCN(nn.Module):
 
     def __init__(
         self,
-        in_feats,
-        gconv=RelGraphConv,
-        latent_dim=[32, 32, 32, 32],
+        input_dims,
+        hidden_dims=32,
+        num_layers=4,
         num_relations=3,
-        num_bases=2,
-        regression=False,
-        edge_dropout=0.2,
-        force_undirected=False,
-        side_features=False,
-        n_side_features=0,
-        multiply_by=1,
+        trans_pooling=True
     ):
         super(FRGCN, self).__init__()
-
-        self.regression = regression
-        self.edge_dropout = edge_dropout
-        self.force_undirected = force_undirected
-        self.side_features = side_features
-        self.multiply_by = multiply_by
-
         self.convs = th.nn.ModuleList()
-        print(in_feats, latent_dim, num_relations, num_bases)
         self.convs.append(
-            gconv(
-                in_feats,
-                latent_dim[0],
+            RelGraphConv(
+                input_dims,
+                hidden_dims,
                 num_relations,
-                num_bases=num_bases,
+                num_bases=2,
                 self_loop=True,
             )
         )
-        for i in range(0, len(latent_dim) - 1):
+        for i in range(num_layers-1):
             self.convs.append(
-                gconv(
-                    latent_dim[i],
-                    latent_dim[i + 1],
+                RelGraphConv(
+                    hidden_dims,
+                    hidden_dims,
                     num_relations,
-                    num_bases=num_bases,
+                    num_bases=2,
                     self_loop=True,
                 )
             )
-
-        self.lin1 = nn.Linear(2 * sum(latent_dim), 128)
-        if side_features:
-            self.lin1 = nn.Linear(2 * sum(latent_dim) + n_side_features, 128)
-        if self.regression:
-            self.lin2 = nn.Linear(128, 1)
+        if trans_pooling:
+            self.pooling = TragetAttentionPooling(infeat=128, hidden_dim=64)
+            self.lin1 = nn.Linear(128, 64)
         else:
-            assert False
-            # self.lin2 = nn.Linear(128, n_classes)
+            self.pooling = diff_pooling    
+            self.lin1 = nn.Linear(128, 64)
+        self.lin2 = nn.Linear(64, 1)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -79,13 +57,8 @@ class FRGCN(nn.Module):
         self.lin2.reset_parameters()
 
     def forward(self, graph):
-        graph = edge_drop(graph, self.edge_dropout,)
-
-        concat_states = []
-        x = graph.ndata["x"].type(
-            th.float32
-        )  # one hot feature to emb vector : this part fix errors
-
+        x = graph.ndata["x"]
+        states = []
         for conv in self.convs:
             # edge mask zero denotes the edge dropped
             x = th.tanh(
@@ -93,23 +66,17 @@ class FRGCN(nn.Module):
                     graph,
                     x,
                     graph.edata["etype"],
-                    norm=graph.edata["edge_mask"].unsqueeze(1),
                 )
             )
-            concat_states.append(x)
-        concat_states = th.cat(concat_states, 1)
-
-        users = graph.ndata["nlabel"][:, 0] == 1
-        items = graph.ndata["nlabel"][:, 1] == 1
-        x = th.cat([concat_states[users], concat_states[items]], 1)
+            states.append(x)
+        x = th.cat(states, 1)
+        x = self.pooling(graph, x)
         x = F.relu(self.lin1(x))
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
         x = th.sigmoid(x)
-        if self.regression:
-            return x[:, 0] * self.multiply_by
-        else:
-            return F.log_softmax(x, dim=-1)
+        x = x[:, 0].squeeze()
+        return x
 
     def __repr__(self):
         return self.__class__.__name__
