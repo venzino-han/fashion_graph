@@ -1,9 +1,8 @@
 import copy, math
 import pickle as pkl
-
+from easydict import EasyDict
+from prettytable import PrettyTable
 import time
-
-import config
 
 import dgl
 import numpy as np
@@ -11,21 +10,17 @@ import pandas as pd
 
 import torch as th
 import torch.nn as nn
-
-from easydict import EasyDict
-# from models.frgcn import FRGCN
-from models.frgcn_trans import FRGCN
-# from models.fgat import FGAT
-from models.fgat_trans import FGAT
-# from models.flgcn import FLGCN
-from models.flgcn_trans import FLGCN
-
-from prettytable import PrettyTable
-
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-from data_generator_task1 import get_task1_dataloader
 from torch import optim
+from sklearn.metrics import accuracy_score, roc_auc_score
 
+import warnings
+warnings.filterwarnings("ignore")
+
+import config
+from models.frgcn import FRGCN
+from models.fgat import FGAT
+from models.flgcn import FLGCN
+from data_generator_task1 import get_task1_dataloader
 from utils import get_args_from_yaml, get_logger
 
 
@@ -56,13 +51,10 @@ task2_valid_answer_df = task2_valid_query_df.query('answer==1')
 def evaluate_task2(model, loader, device):
     # Evaluate AUC, ACC
     model.eval()
-    val_labels = []
     val_preds = []
     for batch in loader:
         with th.no_grad():
-            preds, _ = model(batch[0].to(device))
-        # labels = batch[1].to(device)
-        # val_labels.extend(labels.cpu().tolist())
+            preds = model(batch[0].to(device))
         val_preds.extend(preds.cpu().tolist())
 
     itemset_item_answer_dict={k:v for k,v in zip(task2_valid_answer_df.itemset_id, task2_valid_answer_df.item_id)}
@@ -97,7 +89,7 @@ def evaluate(model, loader, device):
     val_preds = []
     for batch in loader:
         with th.no_grad():
-            preds, _ = model(batch[0].to(device))
+            preds = model(batch[0].to(device))
         labels = batch[1].to(device)
         val_labels.extend(labels.cpu().tolist())
         val_preds.extend(preds.cpu().tolist())
@@ -117,17 +109,16 @@ def train_epoch(model, optimizer, loader, device, logger, log_interval):
     iter_cnt = 0
     iter_dur = []
     mse_loss_fn = nn.MSELoss().to(device)
-    # bce_loss_fn = nn.BCELoss().to(device)
 
     for iter_idx, batch in enumerate(loader, start=1):
         t_start = time.time()
 
         inputs = batch[0].to(device)
         labels = batch[1].to(device)
-        preds, triplet_loss = model(inputs)
-        
+        preds = model(inputs)
         optimizer.zero_grad()
-        loss = mse_loss_fn(preds, labels) #+ 0.05*triplet_loss
+        mse_loss = mse_loss_fn(preds, labels)
+        loss = mse_loss
         loss.backward()
         optimizer.step()
 
@@ -139,7 +130,7 @@ def train_epoch(model, optimizer, loader, device, logger, log_interval):
 
         if iter_idx % log_interval == 0:
             logger.debug(
-                f"Iter={iter_idx}, loss={iter_loss/iter_cnt:.4f}, rmse={math.sqrt(iter_mse/iter_cnt):.4f}, time={np.average(iter_dur):.4f}"
+                f"Iter={iter_idx}, loss={iter_loss/iter_cnt:.4f}, rmse={math.sqrt(iter_mse/iter_cnt):.4f}, time={np.average(iter_dur):.4f},"
             )
             iter_loss = 0.0
             iter_mse = 0.0
@@ -149,60 +140,45 @@ def train_epoch(model, optimizer, loader, device, logger, log_interval):
 
     return epoch_loss / len(loader.dataset)
 
+MODEL_MAP = {
+    "FRGCN": FRGCN,
+    "FGAT": FGAT,
+    "FLGCN": FLGCN,
+}
 
 def train(args: EasyDict, train_loader, test_loader, logger):
     th.manual_seed(0)
     np.random.seed(0)
-    # dgl.random.seed(0)
 
-    ### prepare data and set model
-    in_feats = config.IN_FEATS
-    if args.model_type == "FRGCN":
-        model = FRGCN(
-            in_feats=in_feats,
-            latent_dim=args.latent_dims,
-            num_relations=args.num_relations,
-            num_bases=4,
-            regression=True,
-            edge_dropout=args.edge_dropout,
-        ).to(args.device)
+    in_feats = args.model_input_feat_dims
+    model_class = MODEL_MAP.get(args.model_type)
+    model = model_class(
+        input_dims=in_feats,
+        hidden_dims=args.model_hidden_dims,
+        num_layers=args.model_num_layers,
+        trans_pooling=args.model_trans_pooling,
+    ).to(args.train_device)
 
-    if args.model_type == "FGAT":
-        model = FGAT(
-            in_nfeats=in_feats,
-            in_efeats=args.num_relations,
-            latent_dim=args.latent_dims,
-            edge_dropout=args.edge_dropout,
-        ).to(args.device)
-
-    if args.model_type == "FLGCN":
-        model = FLGCN(
-            in_feats=in_feats,
-            latent_dim=args.latent_dims,
-            edge_dropout=args.edge_dropout,
-        ).to(args.device)
-
-    if args.parameters is not None:
-        model.load_state_dict(th.load(f"./parameters/{args.parameters}"))
+    if args.get("model_parameters") is not None:
+        model.load_state_dict(th.load(f"./parameters/{args.model_parameters}"))
 
     optimizer = optim.Adam(
-        model.parameters(), lr=args.train_lr, weight_decay=args.weight_decay
+        model.parameters(), lr=args.train_learning_rates, weight_decay=args.train_weight_decay
     )
     logger.info("Loading network finished ...\n")
-
     count_parameters(model)
 
     best_epoch = 0
-    best_auc, best_rank, best_acc = 0, 1000, 0
+    best_auc, best_acc = 0, -1
 
-    logger.info(f"Start training ... learning rate : {args.train_lr}")
+    logger.info(f"Start training ... learning rate : {args.train_learning_rates}")
     epochs = list(range(1, args.train_epochs + 1))
 
     eval_func_map = {
         "task1": evaluate,
         "task2": evaluate_task2,
     }
-    eval_func = eval_func_map.get(args.dataset, evaluate)
+    eval_func = eval_func_map.get(args.dataset_name, evaluate)
     for epoch_idx in epochs:
         logger.debug(f"Epoch : {epoch_idx}")
 
@@ -210,32 +186,24 @@ def train(args: EasyDict, train_loader, test_loader, logger):
             model,
             optimizer,
             train_loader,
-            args.device,
+            args.train_device,
             logger,
             log_interval=args.log_interval,
         )
         # train_loss = 0
-        test_auc, test_rank, test_acc = eval_func(model, test_loader, args.device)
+        test_auc, test_rank, test_acc = eval_func(model, test_loader, args.train_device)
         if test_auc is None:
             test_auc = -1
         if test_rank is None:
             test_rank = -1
-        eval_info = {
-            "epoch": epoch_idx,
-            "train_loss": train_loss,
-            "test_auc": test_auc,
-            "test_rank": test_rank,
-            "test_acc": test_acc,
-        }
+
         logger.info(
-            "=== Epoch {}, train loss {:.4f}, test auc {:.4f}, test rank {:.4f}, test acc {:.4f} ===".format(
-                *eval_info.values()
-            )
+            f"=== Epoch {epoch_idx}, train loss {train_loss:.4f}, test auc {test_auc:.4f}, test acc {test_acc:.4f} ==="
         )
 
-        if epoch_idx % args.lr_decay_step == 0:
+        if epoch_idx % args.train_lr_decay_step == 0:
             for param in optimizer.param_groups:
-                param["lr"] = args.lr_decay_factor * param["lr"]
+                param["lr"] = args.train_lr_decay_factor * param["lr"]
             print("lr : ", param["lr"])
 
         if test_rank == -1 :
@@ -244,18 +212,17 @@ def train(args: EasyDict, train_loader, test_loader, logger):
                 best_epoch = epoch_idx
                 best_auc = test_auc
                 best_acc = test_acc
-                best_lr = args.train_lr
+                best_lr = args.train_learning_rates
                 best_state = copy.deepcopy(model.state_dict())
         else:
-            if best_rank > test_rank:
+            if best_acc < test_acc:
                 logger.info(f'new best test rank {test_rank:.4f} acc {test_acc:.4f} ===')
                 best_epoch = epoch_idx
-                best_rank = test_rank
                 best_acc = test_acc
-                best_lr = args.train_lr
+                best_lr = args.train_learning_rates
                 best_state = copy.deepcopy(model.state_dict())
 
-    th.save(best_state, f'./parameters/{args.key}_{args.dataset}_{best_auc:.4f}.pt')
+    th.save(best_state, f'./parameters/{args.key}_{args.dataset_name}_{best_auc:.4f}.pt')
     logger.info(f"Training ends. The best testing auc {best_auc:.4f} acc {best_acc:.4f} at epoch {best_epoch}")
     return best_auc, best_acc, best_lr
 
@@ -269,47 +236,36 @@ DATALOADER_MAP = {
     "task2": get_task2_dataloader,
 }
 
-
 def main():
     with open("./train_configs/train_list.yaml") as f:
         files = yaml.load(f, Loader=yaml.FullLoader)
     file_list = files["files"]
+
+    configs_list = []
     for f in file_list:
-        args = get_args_from_yaml(f)
+        args_list = get_args_from_yaml(f)
+        configs_list += args_list
+
+    for args in configs_list:
         logger = get_logger(name=args.key, path=f"{args.log_dir}/{args.key}.log")
         logger.info("train args")
         for k, v in args.items():
             logger.info(f"{k}: {v}")
 
-        best_lr = None
-        sub_args = args
-        best_auc_acc_lr_list = []
-
-        dataloader_manager = DATALOADER_MAP.get(sub_args.dataset)
+        dataloader_manager = DATALOADER_MAP.get(args.dataset_name)
 
         train_loader, valid_loader, _ = dataloader_manager(
-            data_path=sub_args.dataset,
-            batch_size=sub_args.batch_size,
+            data_path=args.dataset_name,
+            batch_size=args.dataset_batch_size,
             num_workers=config.NUM_WORKER,
-            edge_dropout=sub_args.edge_dropout,
+            edge_dropout=args.dataset_edge_dropout,
+            ui=args.dataset_ui,
+            us=args.dataset_us,
+            si=args.dataset_si,
         )
 
-        for lr in args.train_lrs:
-            sub_args["train_lr"] = lr
-            best_auc_acc_lr = train(sub_args, train_loader, valid_loader, logger=logger)
-            best_auc_acc_lr_list.append(best_auc_acc_lr)
-        
-        best_auc, best_acc, best_lr = max(best_auc_acc_lr_list, key = lambda x: x[0])
-        best_auc_list = [x[0] for x in best_auc_acc_lr_list]
-        best_acc_list = [x[1] for x in best_auc_acc_lr_list]
-        if sub_args.dataset == 'task2':
-            logger.info(f"**********The final best testing RANK {best_auc:.4f} ACC {best_acc:.4f} at lr {best_lr}********")
-            logger.info(f"**********The mean testing RANK {np.mean(best_auc_list):.4f}, {np.std(best_auc_list):.4f} ********")
-        else:
-            logger.info(f"**********The final best testing AUC {best_auc:.4f} ACC {best_acc:.4f} at lr {best_lr}********")
-            logger.info(f"**********The mean testing AUC {np.mean(best_auc_list):.4f}, {np.std(best_auc_list):.4f} ********")
-        logger.info(f"**********The mean testing ACC {np.mean(best_acc_list):.4f}, {np.std(best_acc_list):.4f} ********")
- 
+        best_auc_acc_lr = train(args, train_loader, valid_loader, logger=logger)
+        logger.info(f"best_auc_acc_lr: {best_auc_acc_lr}")
 
 
 if __name__ == "__main__":

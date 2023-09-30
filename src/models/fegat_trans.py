@@ -44,8 +44,7 @@ class FGAT(nn.Module):
                 )
             )
 
-        self.pooling_u = TragetAttentionPooling(infeat=64, hidden_dim=64)  # create a Global Attention Pooling layer
-        self.pooling_i = TragetAttentionPooling(infeat=64, hidden_dim=64)  # create a Global Attention Pooling layer
+        self.pooling = TragetAttentionPooling(infeat=128, hidden_dim=64)  # create a Global Attention Pooling layer
 
         self.lin1 = nn.Linear(128, 64)
         self.dropout1 = nn.Dropout(0.5)
@@ -80,12 +79,11 @@ class FGAT(nn.Module):
             states.append(x)
 
         x = th.cat(states, 1)
-        x_u = self.pooling_u(graph, x, target_node_type=0)
-        x_i = self.pooling_i(graph, x, target_node_type=1)
+        x_u, x_i, intra_cl_loss = self.pooling(graph, x)
         x = th.cat([x_u, x_i], 1)
         x = th.relu(self.lin1(x))
         x = self.dropout1(x)
         x = self.lin2(x)
         x = th.sigmoid(x)
         x = x[:, 0].squeeze()
-        return x
+        return x, intra_cl_loss

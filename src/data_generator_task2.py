@@ -53,7 +53,6 @@ class UserOutfitSubgraph(Dataset):
         '''
         build subgraph from neigbors
         '''
-        # print(self.itemset_item_query_df.loc[index])
         row = self.itemset_item_query_df.loc[index]
         itemset_id, item_id = row.itemset_id, row.item_id 
         label = row.answer
@@ -118,7 +117,7 @@ class UserOutfitSubgraph(Dataset):
         return graph
 
 
-def get_task2_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
+def get_task2_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0, ui=True, si=True, us=True):
     with open('./processed_data/user_item_dict.pkl', 'rb') as f:
         user_item_dict = pickle.load(f)
     with open('./processed_data/item_user_dict.pkl', 'rb') as f:
@@ -136,7 +135,6 @@ def get_task2_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
     user_itemset_df = pd.read_csv('./processed_data/user_itemset_training.csv')
     itemset_item_df = pd.read_csv('./processed_data/itemset_item_training.csv')
     itemset_item_query_df = pd.read_csv('./processed_data/itemset_item_train_query.csv')
-    
     
     user_outfit_subgraph_dataset = UserOutfitSubgraph( 
                                             user_item_dict,

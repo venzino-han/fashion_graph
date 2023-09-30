@@ -42,9 +42,6 @@ class UserOutfitSubgraph(Dataset):
         user_itemset_query_df : main iteration pairs
         '''
         self.user_itemset_query_df = user_itemset_query_df
-        # self.user_item_df = user_item_df
-        # self.user_itemset_df = user_itemset_df
-        # self.itemset_item_df = itemset_item_df
 
         self.user_item_dict = user_item_dict
         self.item_user_dict = item_user_dict
@@ -55,10 +52,6 @@ class UserOutfitSubgraph(Dataset):
         self.edge_dropout = edge_dropout
 
         self.graph = self._build_graph(user_item_df, user_itemset_df, itemset_item_df)
-        # print(self.graph)
-        # print(self.graph.ndata['ntype'])
-        # print(self.graph.edata['etype'])
-
 
     def __len__(self):
         return len(self.user_itemset_query_df)
@@ -132,7 +125,7 @@ class UserOutfitSubgraph(Dataset):
         return graph
 
 
-def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
+def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0, ui=True, si=True, us=True):
     with open('./processed_data/user_item_dict.pkl', 'rb') as f:
         user_item_dict = pickle.load(f)
     with open('./processed_data/item_user_dict.pkl', 'rb') as f:
@@ -150,7 +143,7 @@ def get_task1_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0):
     user_itemset_df = pd.read_csv('./processed_data/user_itemset_training.csv')
     itemset_item_df = pd.read_csv('./processed_data/itemset_item_valid.csv')
     user_itemset_query_df = pd.read_csv('./processed_data/user_itemset_train_query.csv')
-    
+
     
     user_outfit_subgraph_dataset = UserOutfitSubgraph( 
                                             user_item_dict,
