@@ -45,10 +45,9 @@ class FRGCN(nn.Module):
             )
         if trans_pooling:
             self.pooling = TragetAttentionPooling(infeat=128, hidden_dim=64)
-            self.lin1 = nn.Linear(128, 64)
         else:
             self.pooling = diff_pooling    
-            self.lin1 = nn.Linear(128, 64)
+        self.lin1 = nn.Linear(128, 64)
         self.lin2 = nn.Linear(64, 1)
         self.reset_parameters()
 

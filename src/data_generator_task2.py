@@ -162,7 +162,6 @@ def get_task2_dataloader(data_path, batch_size, num_workers, edge_dropout=0.0, u
     user_itemset_df = pd.read_csv('./processed_data/user_itemset_training.csv')
     itemset_item_df = pd.read_csv('./processed_data/itemset_item_training.csv')
     itemset_item_query_df = pd.read_csv('./processed_data/itemset_item_train_query.csv')
-
     
     user_outfit_subgraph_dataset = UserOutfitSubgraph( 
                                             user_item_dict,

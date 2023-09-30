@@ -54,7 +54,7 @@ def evaluate_task2(model, loader, device):
     val_preds = []
     for batch in loader:
         with th.no_grad():
-            preds, _ = model(batch[0].to(device))
+            preds = model(batch[0].to(device))
         val_preds.extend(preds.cpu().tolist())
 
     itemset_item_answer_dict={k:v for k,v in zip(task2_valid_answer_df.itemset_id, task2_valid_answer_df.item_id)}

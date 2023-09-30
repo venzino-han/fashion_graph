@@ -10,7 +10,6 @@ def diff_pooling(graph:dgl.DGLGraph, x:th.Tensor) -> th.Tensor:
     """
     u = graph.ndata["ntype"] == 1
     v = graph.ndata["ntype"] == 0
-    # x = th.cat([x[u], x[v]])
     x = x[u] + x[v]
     return x
 
