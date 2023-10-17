@@ -1,0 +1,11 @@
+---
+model:
+  type: FRGCN
+
+dataset:
+  name: task1
+  us: False
+
+train:
+  learning_rates:
+    - 0.001

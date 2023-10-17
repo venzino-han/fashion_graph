@@ -1,7 +1,42 @@
 files:
-  - ./train_configs/task1_frgcn.yaml
-  - ./train_configs/task2_frgcn.yaml
-  - ./train_configs/task1_fgat.yaml
-  - ./train_configs/task2_fgat.yaml
   - ./train_configs/task1_flgcn.yaml
+  - ./train_configs/task1_frgcn.yaml
+  - ./train_configs/task1_fgat.yaml
   - ./train_configs/task2_flgcn.yaml
+  - ./train_configs/task2_frgcn.yaml
+  - ./train_configs/task2_fgat.yaml
+
+  # - ./train_configs/task2_flgcn_wo_trans.yaml
+  # - ./train_configs/task2_frgcn_wo_trans.yaml
+  # - ./train_configs/task2_fgat_wo_trans.yaml
+
+  # - ./train_configs/task1_flgcn_wo_trans.yaml
+  # - ./train_configs/task1_frgcn_wo_trans.yaml
+  # - ./train_configs/task1_fgat_wo_trans.yaml
+
+  # - ./train_configs/task1_flgcn_sparsity.yaml
+  # - ./train_configs/task1_fgat_sparsity.yaml
+  # - ./train_configs/task1_frgcn_sparsity.yaml
+
+  # - ./train_configs/task2_flgcn_sparsity.yaml
+  # - ./train_configs/task2_fgat_sparsity.yaml
+  # - ./train_configs/task2_frgcn_sparsity.yaml
+
+  # - ./train_configs/task1_flgcn_wo_si.yaml
+  # - ./train_configs/task1_flgcn_wo_ui.yaml
+  # - ./train_configs/task1_flgcn_wo_us.yaml
+  # - ./train_configs/task1_flgcn_wo_trans.yaml
+
+  # - ./train_configs/task1_frgcn_wo_si.yaml
+  # - ./train_configs/task1_frgcn_wo_ui.yaml
+  # - ./train_configs/task1_frgcn_wo_us.yaml
+  # - ./train_configs/task1_frgcn_wo_trans.yaml
+
+  # - ./train_configs/task1_fgat_wo_si.yaml
+  # - ./train_configs/task1_fgat_wo_ui.yaml
+  # - ./train_configs/task1_fgat_wo_us.yaml
+  # - ./train_configs/task1_fgat_wo_trans.yaml
+
+  # - ./train_configs/task2_flgcn_wo_trans.yaml
+  # - ./train_configs/task2_frgcn_wo_trans.yaml
+  # - ./train_configs/task2_fgat_wo_trans.yaml

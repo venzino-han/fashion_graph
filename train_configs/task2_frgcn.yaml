@@ -18,9 +18,9 @@ train:
   epochs: 20
   batch_size: 512
   learning_rates:
-    - 1e-3
-    - 2e-3
-    - 5e-4
+    - 0.001
+    - 0.002
+    - 0.0005
   weight_decay: 0.0
   lr_decay_step: 5
   lr_decay_factor: 0.98

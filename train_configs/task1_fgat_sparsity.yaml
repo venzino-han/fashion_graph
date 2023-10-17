@@ -1,0 +1,15 @@
+---
+model:
+  type: FGAT
+
+dataset:
+  name: task1
+  edge_dropout: 
+    - 0.2
+    - 0.4
+    - 0.6
+    - 0.8
+
+train:
+  learning_rates:
+    - 0.001

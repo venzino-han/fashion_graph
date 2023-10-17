@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from models.LightGCN import LGCNLayer
 from models.target_pooling import TragetAttentionPooling
 from models.diff_pooling import diff_pooling
+from dgl.nn import AvgPooling, MaxPooling, SumPooling, GlobalAttentionPooling
 
 class FLGCN(nn.Module):
 
@@ -28,7 +29,9 @@ class FLGCN(nn.Module):
             self.pooling = TragetAttentionPooling()  # create a Global Attention Pooling layer
             self.lin1 = nn.Linear(hidden_dims*4, 64)
         else: 
-            self.pooling = diff_pooling
+            # self.pooling = diff_pooling
+            # self.pooling = GlobalAttentionPooling(gate_nn=th.nn.Linear(input_dims*4, 1))
+            self.pooling = SumPooling()
             self.lin1 = nn.Linear(input_dims*4, 64)
         self.lin2 = nn.Linear(64, 1)
         self.reset_parameters()

@@ -5,6 +5,7 @@ import torch.nn as nn
 from dgl.nn.pytorch.conv import GATConv
 from models.target_pooling import TragetAttentionPooling
 from models.diff_pooling import diff_pooling
+from dgl.nn import AvgPooling, MaxPooling, SumPooling, GlobalAttentionPooling
 
 class FGAT(nn.Module):
     def __init__(
@@ -37,7 +38,9 @@ class FGAT(nn.Module):
         if trans_pooling:
             self.pooling = TragetAttentionPooling(infeat=128, hidden_dim=64)  # create a Global Attention Pooling layer
         else:
-            self.pooling = diff_pooling
+            # self.pooling = diff_pooling
+            # self.pooling = GlobalAttentionPooling(gate_nn=th.nn.Linear(hidden_dims*4, 1))
+            self.pooling = SumPooling()
         self.lin1 = nn.Linear(128, 64)
         self.dropout1 = nn.Dropout(0.5)
         self.lin2 = nn.Linear(64, 1)

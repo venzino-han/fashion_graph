@@ -1,0 +1,11 @@
+---
+model:
+  type: FGAT
+
+dataset:
+  name: task1
+  si: False
+
+train:
+  learning_rates:
+    - 0.001

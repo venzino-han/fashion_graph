@@ -1,0 +1,15 @@
+---
+model:
+  type: FRGCN
+
+dataset:
+  name: task2
+  edge_dropout: 
+    - 0.2
+    - 0.4
+    - 0.6
+    - 0.8
+
+train:
+  learning_rates:
+    - 0.001
